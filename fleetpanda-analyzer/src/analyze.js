@@ -260,22 +260,69 @@ Return ONLY a valid JSON object with this exact structure:
 }
 Only include implications sections where you have real evidence. Do not create recommendations for the sake of it. If no data exists for a section, use an empty array.`;
 
+/**
+ * Strip the heavy fields from HubSpot data before sending to Groq.
+ * allProperties is a full dump of every HubSpot field — huge and mostly
+ * redundant since the important fields are already promoted to top-level keys.
+ * stageHistory is trimmed to names + timestamps only.
+ */
+function compactHubSpot(data) {
+  const { allProperties, stageHistory, repNotes, ...core } = data;
+  return {
+    ...core,
+    stageHistory: (stageHistory || []).slice(0, 15).map(s => ({
+      value: s.value,
+      timestamp: s.timestamp,
+    })),
+    repNotes: (repNotes || []).slice(0, 5).map(n => ({
+      body: (n.body || '').slice(0, 400),
+      timestamp: n.timestamp,
+    })),
+  };
+}
+
+/**
+ * Trim Avoma call data to fit within Groq's free-tier token limit.
+ * Keeps the most analysis-relevant parts: transcript excerpt, summary,
+ * key points, action items.
+ */
+function compactAvoma(data) {
+  return {
+    totalCalls: data.totalCalls,
+    note: data.note,
+    calls: (data.calls || []).map(call => ({
+      callNumber:   call.callNumber,
+      callType:     call.callType,
+      title:        call.title,
+      date:         call.date,
+      participants: call.participants,
+      transcript:   (call.fullTranscript || '').slice(0, 3000),
+      summary:      (call.summary || '').slice(0, 600),
+      keyPoints:    (call.keyPoints || []).slice(0, 8),
+      actionItems:  (call.actionItems || []).slice(0, 8),
+    })),
+  };
+}
+
 async function analyzeDeal(hubspotData, avomaData) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error('GROQ_API_KEY not set in .env');
 
   const model = process.env.GROQ_MODEL || DEFAULT_MODEL;
 
+  const hubCompact  = compactHubSpot(hubspotData);
+  const avomaCompact = compactAvoma(avomaData);
+
   const userContent = `Below is the CRM and call data for a FleetPanda deal. Analyze it using the win-loss framework and return the JSON debrief.
 
 ## HubSpot CRM Data
 \`\`\`json
-${JSON.stringify(hubspotData, null, 2)}
+${JSON.stringify(hubCompact, null, 2)}
 \`\`\`
 
-## Avoma Call Summary
+## Avoma Call Data
 \`\`\`json
-${JSON.stringify(avomaData, null, 2)}
+${JSON.stringify(avomaCompact, null, 2)}
 \`\`\`
 
 Return ONLY a valid JSON object matching the exact structure specified in your instructions. No markdown fences, no commentary — just the JSON.`;
@@ -288,7 +335,7 @@ Return ONLY a valid JSON object matching the exact structure specified in your i
     },
     body: JSON.stringify({
       model,
-      max_tokens: 8192,
+      max_tokens: 4096,
       temperature: 0.2,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
