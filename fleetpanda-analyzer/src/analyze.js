@@ -1,6 +1,6 @@
 'use strict';
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const Groq = require('groq-sdk');
 const fs = require('fs');
 const path = require('path');
 
@@ -249,14 +249,10 @@ Return ONLY a valid JSON object with this exact structure:
 Only include implications sections where you have real evidence. Do not create recommendations for the sake of it. If no data exists for a section, use an empty array.`;
 
 async function analyzeDeal(hubspotData, avomaData) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY not set in .env');
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error('GROQ_API_KEY not set in .env');
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
-    systemInstruction: SYSTEM_PROMPT,
-  });
+  const client = new Groq({ apiKey });
 
   const userContent = `Below is the CRM and call data for a FleetPanda deal. Analyze it using the win-loss framework and return the JSON debrief.
 
@@ -272,15 +268,17 @@ ${JSON.stringify(avomaData, null, 2)}
 
 Return ONLY a valid JSON object matching the exact structure specified in your instructions. No markdown fences, no commentary — just the JSON.`;
 
-  const result = await model.generateContent({
-    contents: [{ role: 'user', parts: [{ text: userContent }] }],
-    generationConfig: {
-      maxOutputTokens: 8192,
-      responseMimeType: 'application/json',
-    },
+  const response = await client.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    max_tokens: 8192,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: userContent },
+    ],
+    response_format: { type: 'json_object' },
   });
 
-  const rawText = result.response.text().trim();
+  const rawText = response.choices[0].message.content.trim();
 
   // Strip markdown code fences if present
   let jsonText = rawText;
@@ -292,7 +290,7 @@ Return ONLY a valid JSON object matching the exact structure specified in your i
   try {
     analysis = JSON.parse(jsonText);
   } catch (err) {
-    throw new Error(`Gemini returned invalid JSON: ${err.message}\n\nRaw response:\n${rawText.slice(0, 500)}`);
+    throw new Error(`Groq returned invalid JSON: ${err.message}\n\nRaw response:\n${rawText.slice(0, 500)}`);
   }
 
   // Save output
