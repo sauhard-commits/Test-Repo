@@ -1,6 +1,6 @@
 'use strict';
 
-const { OpenAI } = require('openai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fs = require('fs');
 const path = require('path');
 
@@ -249,10 +249,14 @@ Return ONLY a valid JSON object with this exact structure:
 Only include implications sections where you have real evidence. Do not create recommendations for the sake of it. If no data exists for a section, use an empty array.`;
 
 async function analyzeDeal(hubspotData, avomaData) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error('OPENAI_API_KEY not set in .env');
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY not set in .env');
 
-  const client = new OpenAI({ apiKey });
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.0-flash',
+    systemInstruction: SYSTEM_PROMPT,
+  });
 
   const userContent = `Below is the CRM and call data for a FleetPanda deal. Analyze it using the win-loss framework and return the JSON debrief.
 
@@ -268,16 +272,15 @@ ${JSON.stringify(avomaData, null, 2)}
 
 Return ONLY a valid JSON object matching the exact structure specified in your instructions. No markdown fences, no commentary — just the JSON.`;
 
-  const response = await client.chat.completions.create({
-    model: 'gpt-4o',
-    max_tokens: 8192,
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: userContent },
-    ],
+  const result = await model.generateContent({
+    contents: [{ role: 'user', parts: [{ text: userContent }] }],
+    generationConfig: {
+      maxOutputTokens: 8192,
+      responseMimeType: 'application/json',
+    },
   });
 
-  const rawText = response.choices[0].message.content.trim();
+  const rawText = result.response.text().trim();
 
   // Strip markdown code fences if present
   let jsonText = rawText;
@@ -289,7 +292,7 @@ Return ONLY a valid JSON object matching the exact structure specified in your i
   try {
     analysis = JSON.parse(jsonText);
   } catch (err) {
-    throw new Error(`GPT-4o returned invalid JSON: ${err.message}\n\nRaw response:\n${rawText.slice(0, 500)}`);
+    throw new Error(`Gemini returned invalid JSON: ${err.message}\n\nRaw response:\n${rawText.slice(0, 500)}`);
   }
 
   // Save output
