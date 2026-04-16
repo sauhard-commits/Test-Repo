@@ -270,7 +270,7 @@ Return ONLY a valid JSON object matching the exact structure specified in your i
 
   const response = await client.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
-    max_tokens: 8192,
+    max_tokens: 4000,
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: userContent },
