@@ -13,8 +13,8 @@ const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
 
-const GROK_BASE = 'https://api.x.ai/v1';
-const DEFAULT_MODEL = 'grok-3';
+const GROK_BASE = 'https://api.groq.com/openai/v1';
+const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
 
 const SYSTEM_PROMPT = `You are a win-loss analysis specialist. Your job is to analyze closed-won, closed-lost, and no-decision opportunities using CRM data, call transcripts, and internal deal context to uncover buyer truth, identify repeatable patterns, and recommend concrete actions.
 FleetPanda sells fuel management software to fuel distributors. Key differentiators: fast onboarding, clean UI, reconciliation automation. Common competitors: Opis, Gasboy, Titan. Common loss reasons to watch for: SAP/QuickBooks integration gaps, missing multi-depot support, pricing perceived as high relative to unclear ROI, competitor already embedded in account.
@@ -261,10 +261,10 @@ Return ONLY a valid JSON object with this exact structure:
 Only include implications sections where you have real evidence. Do not create recommendations for the sake of it. If no data exists for a section, use an empty array.`;
 
 async function analyzeDeal(hubspotData, avomaData) {
-  const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) throw new Error('XAI_API_KEY not set in .env');
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error('GROQ_API_KEY not set in .env');
 
-  const model = process.env.GROK_MODEL || DEFAULT_MODEL;
+  const model = process.env.GROQ_MODEL || DEFAULT_MODEL;
 
   const userContent = `Below is the CRM and call data for a FleetPanda deal. Analyze it using the win-loss framework and return the JSON debrief.
 

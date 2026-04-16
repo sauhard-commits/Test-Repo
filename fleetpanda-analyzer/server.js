@@ -137,7 +137,7 @@ app.listen(PORT, () => {
   console.log(`Running at http://localhost:${PORT}`);
   console.log(`\nRequired env vars:`);
   console.log(`  HUBSPOT_API_KEY  — HubSpot private app token`);
-  console.log(`  XAI_API_KEY      — xAI / Grok API key`);
+  console.log(`  GROQ_API_KEY     — Groq API key (groq.com)`);
   console.log(`  AVOMA_API_KEY    — Avoma API key (Settings → Integrations → API)`);
-  console.log(`  GROK_MODEL       — (optional) default: grok-3\n`);
+  console.log(`  GROQ_MODEL       — (optional) default: llama-3.3-70b-versatile\n`);
 });
