@@ -109,7 +109,7 @@
       color: var(--text-light);
     }
 
-    input[type="text"], input[type="url"] {
+    input[type="text"], input[type="url"], textarea {
       padding: 10px 12px;
       border: 1px solid var(--gray-border);
       border-radius: 8px;
@@ -118,11 +118,55 @@
       background: var(--white);
       transition: border-color 0.15s, box-shadow 0.15s;
       outline: none;
+      font-family: inherit;
+      width: 100%;
     }
 
-    input:focus {
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+      line-height: 1.5;
+    }
+
+    input:focus, textarea:focus {
       border-color: var(--amber);
       box-shadow: 0 0 0 3px rgba(200,168,75,0.15);
+    }
+
+    .field-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .field-header label { margin-bottom: 0; }
+
+    .avoma-toggle {
+      display: flex;
+      border: 1px solid var(--gray-border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .avoma-toggle button {
+      padding: 3px 10px;
+      border: none;
+      background: var(--white);
+      color: var(--text-light);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .avoma-toggle button + button {
+      border-left: 1px solid var(--gray-border);
+    }
+
+    .avoma-toggle button.active {
+      background: var(--amber);
+      color: var(--white);
     }
 
     .btn-analyze {
@@ -473,8 +517,19 @@
         <input type="text" id="dealName" placeholder="e.g. Acme Fuel" autocomplete="off" />
       </div>
       <div class="form-group">
-        <label for="avomaUrl">Avoma call link</label>
-        <input type="url" id="avomaUrl" placeholder="https://app.avoma.com/..." autocomplete="off" />
+        <div class="field-header">
+          <label>Avoma call data</label>
+          <div class="avoma-toggle">
+            <button type="button" id="toggleUrl" class="active" onclick="switchAvomaMode('url')">URL</button>
+            <button type="button" id="togglePaste" onclick="switchAvomaMode('paste')">Paste notes</button>
+          </div>
+        </div>
+        <div id="avomaUrlWrapper">
+          <input type="url" id="avomaUrl" placeholder="https://app.avoma.com/..." autocomplete="off" />
+        </div>
+        <div id="avomaPasteWrapper" style="display:none;">
+          <textarea id="avomaPaste" placeholder="Paste the Avoma call summary, transcript, or notes here..." rows="4"></textarea>
+        </div>
       </div>
     </div>
     <button class="btn-analyze" id="analyzeBtn" onclick="startAnalysis()">
@@ -535,6 +590,15 @@
   let currentCompanyName = '';
   let currentFilename = '';
   let sseSource = null;
+  let avomaMode = 'url';
+
+  function switchAvomaMode(mode) {
+    avomaMode = mode;
+    document.getElementById('toggleUrl').classList.toggle('active', mode === 'url');
+    document.getElementById('togglePaste').classList.toggle('active', mode === 'paste');
+    document.getElementById('avomaUrlWrapper').style.display = mode === 'url' ? '' : 'none';
+    document.getElementById('avomaPasteWrapper').style.display = mode === 'paste' ? '' : 'none';
+  }
 
   function uuid() {
     return Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -567,7 +631,8 @@
 
   async function startAnalysis() {
     const dealName = document.getElementById('dealName').value.trim();
-    const avomaUrl = document.getElementById('avomaUrl').value.trim();
+    const avomaUrl = avomaMode === 'url' ? document.getElementById('avomaUrl').value.trim() : '';
+    const avomaText = avomaMode === 'paste' ? document.getElementById('avomaPaste').value.trim() : '';
 
     if (!dealName) {
       showError('Please enter a company name.');
@@ -608,7 +673,7 @@
       const res = await fetch('/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dealName, avomaUrl, requestId }),
+        body: JSON.stringify({ dealName, avomaUrl, avomaText, requestId }),
       });
 
       const json = await res.json();

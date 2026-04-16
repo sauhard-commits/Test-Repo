@@ -7,7 +7,7 @@ const path = require('path');
 const fs = require('fs');
 
 const { fetchHubSpotData } = require('./src/hubspot');
-const { fetchAvomaData } = require('./src/avoma');
+const { fetchAvomaData, processAvomaText } = require('./src/avoma');
 const { analyzeDeal } = require('./src/analyze');
 const { generateDocx } = require('./src/docx_writer');
 
@@ -45,7 +45,7 @@ app.get('/progress/:requestId', (req, res) => {
 
 // POST /analyze
 app.post('/analyze', async (req, res) => {
-  const { dealName, avomaUrl, requestId } = req.body;
+  const { dealName, avomaUrl, avomaText, requestId } = req.body;
 
   if (!dealName || !dealName.trim()) {
     return res.status(400).json({ error: 'dealName is required' });
@@ -58,7 +58,9 @@ app.post('/analyze', async (req, res) => {
 
     const [hubspotData, avomaData] = await Promise.all([
       fetchHubSpotData(dealName.trim()),
-      fetchAvomaData(avomaUrl ? avomaUrl.trim() : ''),
+      avomaText && avomaText.trim()
+        ? Promise.resolve(processAvomaText(avomaText.trim()))
+        : fetchAvomaData(avomaUrl ? avomaUrl.trim() : ''),
     ]);
 
     sendProgress(requestId, 1, 'HubSpot data retrieved.');

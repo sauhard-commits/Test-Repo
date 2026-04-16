@@ -199,4 +199,30 @@ function extractAvomaContent($, html) {
   return data;
 }
 
-module.exports = { fetchAvomaData };
+function processAvomaText(text) {
+  if (!text || !text.trim()) {
+    return { error: 'No call notes provided.' };
+  }
+
+  const cleaned = text.trim();
+  const result = {
+    title: '',
+    meetingDate: '',
+    duration: '',
+    participants: [],
+    keyMoments: [],
+    topics: [],
+    actionItems: [],
+    speakerHighlights: [],
+    objections: [],
+    summary: cleaned,
+    rawTextSample: cleaned.slice(0, 2000),
+  };
+
+  const outputPath = path.join(__dirname, '..', 'outputs', 'avoma_raw.json');
+  fs.writeFileSync(outputPath, JSON.stringify(result, null, 2));
+
+  return result;
+}
+
+module.exports = { fetchAvomaData, processAvomaText };
