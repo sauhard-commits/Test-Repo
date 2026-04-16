@@ -1,6 +1,6 @@
 'use strict';
 
-const Anthropic = require('@anthropic-ai/sdk');
+const { OpenAI } = require('openai');
 const fs = require('fs');
 const path = require('path');
 
@@ -249,10 +249,10 @@ Return ONLY a valid JSON object with this exact structure:
 Only include implications sections where you have real evidence. Do not create recommendations for the sake of it. If no data exists for a section, use an empty array.`;
 
 async function analyzeDeal(hubspotData, avomaData) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set in .env');
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY not set in .env');
 
-  const client = new Anthropic({ apiKey });
+  const client = new OpenAI({ apiKey });
 
   const userContent = `Below is the CRM and call data for a FleetPanda deal. Analyze it using the win-loss framework and return the JSON debrief.
 
@@ -268,20 +268,16 @@ ${JSON.stringify(avomaData, null, 2)}
 
 Return ONLY a valid JSON object matching the exact structure specified in your instructions. No markdown fences, no commentary — just the JSON.`;
 
-  const message = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o',
     max_tokens: 8192,
-    system: [
-      {
-        type: 'text',
-        text: SYSTEM_PROMPT,
-        cache_control: { type: 'ephemeral' },
-      },
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: userContent },
     ],
-    messages: [{ role: 'user', content: userContent }],
   });
 
-  const rawText = message.content[0].text.trim();
+  const rawText = response.choices[0].message.content.trim();
 
   // Strip markdown code fences if present
   let jsonText = rawText;
@@ -293,7 +289,7 @@ Return ONLY a valid JSON object matching the exact structure specified in your i
   try {
     analysis = JSON.parse(jsonText);
   } catch (err) {
-    throw new Error(`Claude returned invalid JSON: ${err.message}\n\nRaw response:\n${rawText.slice(0, 500)}`);
+    throw new Error(`GPT-4o returned invalid JSON: ${err.message}\n\nRaw response:\n${rawText.slice(0, 500)}`);
   }
 
   // Save output
