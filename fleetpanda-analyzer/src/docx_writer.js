@@ -352,7 +352,6 @@ function buildCoverLine(debrief, companyName) {
   const account = s.account || companyName || 'Unknown';
   const outcome = s.outcome ? (s.outcome.charAt(0).toUpperCase() + s.outcome.slice(1)) : 'Unknown';
 
-  // Try to get month/year from deal close date in hubspot or use today
   const now = new Date();
   const monthYear = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
 

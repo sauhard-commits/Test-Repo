@@ -1,8 +1,20 @@
 'use strict';
 
-const Anthropic = require('@anthropic-ai/sdk');
+/**
+ * Analysis skill — calls the Grok API (xAI) to produce a structured
+ * win/loss debrief JSON from HubSpot + Avoma data.
+ *
+ * Env vars:
+ *   XAI_API_KEY  — your xAI / Grok API key (required)
+ *   GROK_MODEL   — model override (optional, default: grok-3)
+ */
+
+const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
+
+const GROK_BASE = 'https://api.x.ai/v1';
+const DEFAULT_MODEL = 'grok-3';
 
 const SYSTEM_PROMPT = `You are a win-loss analysis specialist. Your job is to analyze closed-won, closed-lost, and no-decision opportunities using CRM data, call transcripts, and internal deal context to uncover buyer truth, identify repeatable patterns, and recommend concrete actions.
 FleetPanda sells fuel management software to fuel distributors. Key differentiators: fast onboarding, clean UI, reconciliation automation. Common competitors: Opis, Gasboy, Titan. Common loss reasons to watch for: SAP/QuickBooks integration gaps, missing multi-depot support, pricing perceived as high relative to unclear ROI, competitor already embedded in account.
@@ -249,10 +261,10 @@ Return ONLY a valid JSON object with this exact structure:
 Only include implications sections where you have real evidence. Do not create recommendations for the sake of it. If no data exists for a section, use an empty array.`;
 
 async function analyzeDeal(hubspotData, avomaData) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set in .env');
+  const apiKey = process.env.XAI_API_KEY;
+  if (!apiKey) throw new Error('XAI_API_KEY not set in .env');
 
-  const client = new Anthropic({ apiKey });
+  const model = process.env.GROK_MODEL || DEFAULT_MODEL;
 
   const userContent = `Below is the CRM and call data for a FleetPanda deal. Analyze it using the win-loss framework and return the JSON debrief.
 
@@ -268,16 +280,37 @@ ${JSON.stringify(avomaData, null, 2)}
 
 Return ONLY a valid JSON object matching the exact structure specified in your instructions. No markdown fences, no commentary — just the JSON.`;
 
-  const message = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 8192,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: userContent }],
+  const response = await fetch(`${GROK_BASE}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 8192,
+      temperature: 0.2,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userContent },
+      ],
+    }),
+    timeout: 180000,
   });
 
-  const rawText = message.content[0].text.trim();
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Grok API error ${response.status}: ${text}`);
+  }
 
-  // Strip markdown code fences if present
+  const data = await response.json();
+  if (!data.choices || !data.choices[0]) {
+    throw new Error('Grok returned an empty response');
+  }
+
+  const rawText = data.choices[0].message.content.trim();
+
+  // Strip markdown fences if present
   let jsonText = rawText;
   if (jsonText.startsWith('```')) {
     jsonText = jsonText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
@@ -287,7 +320,7 @@ Return ONLY a valid JSON object matching the exact structure specified in your i
   try {
     analysis = JSON.parse(jsonText);
   } catch (err) {
-    throw new Error(`Claude returned invalid JSON: ${err.message}\n\nRaw response:\n${rawText.slice(0, 500)}`);
+    throw new Error(`Grok returned invalid JSON: ${err.message}\n\nRaw response:\n${rawText.slice(0, 500)}`);
   }
 
   // Save output
