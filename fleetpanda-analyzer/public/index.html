@@ -467,14 +467,10 @@
   <!-- Input Card -->
   <div class="input-card">
     <h2>Analyze a deal</h2>
-    <div class="form-row">
+    <div class="form-row" style="grid-template-columns: 1fr;">
       <div class="form-group">
         <label for="dealName">Company name</label>
         <input type="text" id="dealName" placeholder="e.g. Acme Fuel" autocomplete="off" />
-      </div>
-      <div class="form-group">
-        <label for="avomaUrl">Avoma call link</label>
-        <input type="url" id="avomaUrl" placeholder="https://app.avoma.com/..." autocomplete="off" />
       </div>
     </div>
     <button class="btn-analyze" id="analyzeBtn" onclick="startAnalysis()">
@@ -498,7 +494,7 @@
       </div>
       <div class="step" id="step2">
         <div class="step-icon" id="step2-icon">2</div>
-        <span class="step-label" id="step2-label">Reading Avoma call summary</span>
+        <span class="step-label" id="step2-label">Searching Avoma for calls</span>
       </div>
       <div class="step" id="step3">
         <div class="step-icon" id="step3-icon">3</div>
@@ -567,7 +563,6 @@
 
   async function startAnalysis() {
     const dealName = document.getElementById('dealName').value.trim();
-    const avomaUrl = document.getElementById('avomaUrl').value.trim();
 
     if (!dealName) {
       showError('Please enter a company name.');
@@ -600,15 +595,14 @@
       sseSource.close();
     };
 
-    // Activate steps 1 & 2 immediately (parallel)
+    // Step 1 activates first; step 2 activates once step 1 is done (sequential)
     setStepState(1, 'active');
-    setStepState(2, 'active');
 
     try {
       const res = await fetch('/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dealName, avomaUrl, requestId }),
+        body: JSON.stringify({ dealName, requestId }),
       });
 
       const json = await res.json();
@@ -635,21 +629,30 @@
 
   function handleProgress(data) {
     const { step, message } = data;
-    if (step === 1 || step === 2) {
-      if (message && message.toLowerCase().includes('retrieved')) {
-        setStepState(step, 'done', message);
+    const msg = (message || '').toLowerCase();
+
+    if (step === 1) {
+      if (msg.includes('retrieved')) {
+        setStepState(1, 'done', message);
+        setStepState(2, 'active'); // activate Avoma step only after HubSpot done
       } else {
-        setStepState(step, 'active', message);
+        setStepState(1, 'active', message);
+      }
+    } else if (step === 2) {
+      if (msg.includes('found') || msg.includes('no avoma')) {
+        setStepState(2, 'done', message);
+      } else {
+        setStepState(2, 'active', message);
       }
     } else if (step === 3) {
-      if (message && message.toLowerCase().includes('complete')) {
+      if (msg.includes('complete')) {
         setStepState(3, 'done', message);
         setStepState(4, 'active');
       } else {
         setStepState(3, 'active', message);
       }
     } else if (step === 4) {
-      if (message && message.toLowerCase().includes('ready')) {
+      if (msg.includes('ready')) {
         setStepState(4, 'done', message);
       }
     } else if (step === 'error') {
